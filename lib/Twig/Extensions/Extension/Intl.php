@@ -1,19 +1,9 @@
 <?php
-
-/*
- * This file is part of Twig.
- *
- * (c) 2010 Fabien Potencier
- *
- * For the full copyright and license information, please view the LICENSE
- * file that was distributed with this source code.
- */
-
 class Twig_Extensions_Extension_Intl extends Twig_Extension
 {
     public function __construct()
     {
-        if (!class_exists('IntlDateFormatter')) {
+        if (!extension_loaded('intl')) {
             throw new RuntimeException('The intl extension is needed to use intl-based filters.');
         }
     }
@@ -26,7 +16,8 @@ class Twig_Extensions_Extension_Intl extends Twig_Extension
     public function getFilters()
     {
         return array(
-            new Twig_SimpleFilter('localizeddate', 'twig_localized_date_filter', array('needs_environment' => true)),
+            new Twig_SimpleFilter('intl_date', 'twig_intl_date_filter', array('needs_environment' => true)),
+            new Twig_SimpleFilter('intl_currency', 'twig_intl_currency_filter'),
         );
     }
 
@@ -37,15 +28,20 @@ class Twig_Extensions_Extension_Intl extends Twig_Extension
      */
     public function getName()
     {
-        return 'intl';
+        return 'Intl';
     }
 }
 
-function twig_localized_date_filter(Twig_Environment $env, $date, $dateFormat = 'medium', $timeFormat = 'medium', $locale = null, $timezone = null, $format = null)
+function twig_intl_date_filter(Twig_Environment $env,
+                               $date,
+                               $locale = null,
+                               $dateType = IntlDateFormatter::MEDIUM,
+                               $timeType = IntlDateFormatter::MEDIUM,
+                               $timezone = null,
+                               $calendar = IntlDateFormatter::GREGORIAN,
+                               $pattern = null)
 {
-    $date = twig_date_converter($env, $date, $timezone);
-
-    $formatValues = array(
+    $constants = array(
         'none'   => IntlDateFormatter::NONE,
         'short'  => IntlDateFormatter::SHORT,
         'medium' => IntlDateFormatter::MEDIUM,
@@ -53,14 +49,58 @@ function twig_localized_date_filter(Twig_Environment $env, $date, $dateFormat = 
         'full'   => IntlDateFormatter::FULL,
     );
 
-    $formatter = IntlDateFormatter::create(
-        $locale,
-        $formatValues[$dateFormat],
-        $formatValues[$timeFormat],
-        $date->getTimezone()->getName(),
-        IntlDateFormatter::GREGORIAN,
-        $format
-    );
+    if (isset($constants[$dateType])) {
+        $dateType = $constants[$dateType];
+    }
 
-    return $formatter->format($date->getTimestamp());
+    if (isset($constants[$timeType])) {
+        $timeType = $constants[$timeType];
+    }
+
+    $date = twig_date_converter($env, $date, $timezone);
+    $timezone = $date->getTimeZone()->getName();
+
+    $hash = md5($locale . $dateType . $timeType . $timezone . $pattern);
+
+    static $filters = array();
+
+    if (isset($filters[$hash])) {
+        $fmt = $filters[$hash];
+    } else {
+        $fmt = new IntlDateFormatter(
+            $locale,
+            $dateType,
+            $timeType,
+            $timezone,
+            $calendar,
+            $pattern
+        );
+        $filters[$hash] = $fmt;
+    }
+
+    return $fmt->format($date->getTimestamp());
+}
+
+function twig_intl_currency_filter($value, $locale = null, $currency = null, $fractionDigits = null)
+{
+    $hash = md5($locale . $currency . $fractionDigits);
+
+    static $filters = array();
+
+    if (isset($filters[$hash])) {
+        $fmt = $filters[$hash];
+    } else {
+        $fmt = new NumberFormatter($locale, NumberFormatter::CURRENCY);
+        $filters[$hash] = $fmt;
+    }
+
+    if (!isset($currency)) {
+        $currency = $fmt->getTextAttribute(NumberFormatter::CURRENCY_CODE);
+    }
+
+    if (isset($fractionDigits)) {
+        $fmt->setAttribute(NumberFormatter::FRACTION_DIGITS, (int) $fractionDigits);
+    }
+
+    return $fmt->formatCurrency((float) $value, $currency);
 }
