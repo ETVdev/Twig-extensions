@@ -27,6 +27,7 @@ class Twig_Extensions_Extension_Intl extends Twig_Extension
         return array(
             new Twig_SimpleFilter('intl_date', 'twig_intl_date_filter', array('needs_environment' => true)),
             new Twig_SimpleFilter('intl_currency', 'twig_intl_currency_filter'),
+            new Twig_SimpleFilter('intl_number', 'twig_intl_number_filter'),
         );
     }
 
@@ -112,4 +113,47 @@ function twig_intl_currency_filter($value, $locale = null, $currency = null, $fr
     }
 
     return $fmt->formatCurrency((float) $value, $currency);
+}
+
+function twig_intl_number_filter($value,
+                                 $locale = null,
+                                 $style = NumberFormatter::DECIMAL,
+                                 $type = NumberFormatter::TYPE_DEFAULT)
+{
+    $styleConstants = array(
+        'decimal'    => NumberFormatter::DECIMAL,
+        'percent'    => NumberFormatter::PERCENT,
+        'scientific' => NumberFormatter::SCIENTIFIC,
+        'spellout'   => NumberFormatter::SPELLOUT,
+        'ordinal'    => NumberFormatter::ORDINAL,
+        'duration'   => NumberFormatter::DURATION,
+    );
+
+    if (isset($styleConstants[$style])) {
+        $style = $styleConstants[$style];
+    }
+
+    $typeConstants = array(
+        'default'  => NumberFormatter::TYPE_DEFAULT,
+        'int32'    => NumberFormatter::TYPE_INT32,
+        'int64'    => NumberFormatter::TYPE_INT64,
+        'double'   => NumberFormatter::TYPE_DOUBLE,
+    );
+
+    if (isset($typeConstants[$type])) {
+        $type = $typeConstants[$type];
+    }
+
+    $hash = md5($locale . $style . $type);
+
+    static $filters = array();
+
+    if (isset($filters[$hash])) {
+        $fmt = $filters[$hash];
+    } else {
+        $fmt = new NumberFormatter($locale, $style);
+        $filters[$hash] = $fmt;
+    }
+
+    return $fmt->format($value, $type);
 }
