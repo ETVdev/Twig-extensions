@@ -112,7 +112,7 @@ function twig_intl_currency_filter($value, $locale = null, $currency = null, $fr
         $fmt->setAttribute(NumberFormatter::FRACTION_DIGITS, (int) $fractionDigits);
     }
 
-    return $fmt->formatCurrency((float) $value, $currency);
+    return $fmt->formatCurrency( floatval($value), $currency);
 }
 
 function twig_intl_number_filter($value,
